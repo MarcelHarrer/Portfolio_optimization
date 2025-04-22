@@ -5,6 +5,7 @@ from scipy.optimize import minimize
 import plotly.graph_objects as go
 from dash import Dash, dcc, html, Input, Output, State
 from functools import lru_cache
+import os
 
 # Define functions for portfolio optimization
 def get_stock_data(tickers, start_date, end_date):
@@ -83,6 +84,16 @@ app.layout = html.Div([
             value=['AAPL', 'MSFT', 'GOOGL'],  # Default selected stocks
             multi=True
         ),
+        html.Label("Select Start Date:"),
+        dcc.DatePickerSingle(
+            id='start-date-picker',
+            date='2020-01-01'  # Default start date
+        ),
+        html.Label("Select End Date:"),
+        dcc.DatePickerSingle(
+            id='end-date-picker',
+            date='2024-01-01'  # Default end date
+        ),
         html.Button("Calculate Portfolio", id='calculate-button', n_clicks=0)
     ]),
     dcc.Loading(
@@ -100,15 +111,14 @@ app.layout = html.Div([
     [Output('portfolio-metrics', 'children'),
      Output('efficient-frontier', 'figure')],
     [Input('calculate-button', 'n_clicks')],
-    [State('stock-picker', 'value')]
+    [State('stock-picker', 'value'),
+     State('start-date-picker', 'date'),
+     State('end-date-picker', 'date')]
 )
-def update_dashboard(n_clicks, selected_tickers):
-    if n_clicks == 0 or not selected_tickers:
-        return "Please select stocks and click the button to calculate.", {}
+def update_dashboard(n_clicks, selected_tickers, start_date, end_date):
+    if n_clicks == 0 or not selected_tickers or not start_date or not end_date:
+        return "Please select stocks, dates, and click the button to calculate.", {}
 
-    # Fetch stock data and calculate returns
-    start_date = '2020-01-01'
-    end_date = '2024-01-01'
     risk_free_rate = 0.02
     try:
         stock_data = get_stock_data_cached(tuple(selected_tickers), start_date, end_date)
@@ -178,4 +188,5 @@ def update_dashboard(n_clicks, selected_tickers):
     return metrics, figure
 
 if __name__ == '__main__':
-    app.run(debug=False, port=8050)
+    port = int(os.getenv("PORT", 8080))  # Use environment variable PORT or default to 8080
+    app.run(debug=False, port=port)
