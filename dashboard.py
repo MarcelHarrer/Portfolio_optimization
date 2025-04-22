@@ -1,0 +1,181 @@
+import yfinance as yf
+import pandas as pd
+import numpy as np
+from scipy.optimize import minimize
+import plotly.graph_objects as go
+from dash import Dash, dcc, html, Input, Output, State
+from functools import lru_cache
+
+# Define functions for portfolio optimization
+def get_stock_data(tickers, start_date, end_date):
+    """
+    Fetch historical stock data for given tickers.
+    Skips tickers that fail to fetch data and logs a warning.
+    """
+    data = pd.DataFrame()
+    for ticker in tickers:
+        try:
+            stock_data = yf.download(ticker, start=start_date, end=end_date, auto_adjust=False)
+            if 'Adj Close' in stock_data.columns:
+                data[ticker] = stock_data['Adj Close']
+            else:
+                print(f"Warning: 'Adj Close' column not found for ticker {ticker}. Skipping.")
+        except Exception as e:
+            print(f"Error fetching data for {ticker}: {e}. Skipping.")
+    if data.empty:
+        raise ValueError("No valid data fetched for the selected tickers.")
+    return data
+
+@lru_cache(maxsize=10)
+def get_stock_data_cached(tickers, start_date, end_date):
+    return get_stock_data(tickers, start_date, end_date)
+
+def calculate_portfolio_metrics(weights, returns):
+    portfolio_return = np.sum(returns.mean() * weights) * 252
+    portfolio_volatility = np.sqrt(np.dot(weights.T, np.dot(returns.cov() * 252, weights)))
+    return portfolio_return, portfolio_volatility
+
+def negative_sharpe_ratio(weights, returns, risk_free_rate):
+    portfolio_return, portfolio_volatility = calculate_portfolio_metrics(weights, returns)
+    sharpe_ratio = (portfolio_return - risk_free_rate) / portfolio_volatility
+    return -sharpe_ratio
+
+def optimize_portfolio(returns, risk_free_rate):
+    num_assets = returns.shape[1]
+    constraints = ({'type': 'eq', 'fun': lambda x: np.sum(x) - 1})
+    bounds = tuple((0, 1) for _ in range(num_assets))
+    initial_weights = np.array([1/num_assets] * num_assets)
+    result = minimize(negative_sharpe_ratio, 
+                      initial_weights,
+                      args=(returns, risk_free_rate),
+                      method='SLSQP',
+                      bounds=bounds,
+                      constraints=constraints)
+    return result.x
+
+# Create Dash app
+app = Dash(__name__)
+
+# Layout with dropdown for stock selection, button, and loading spinner
+app.layout = html.Div([
+    html.H1("Interactive Portfolio Optimization Dashboard"),
+    html.Div([
+        html.Label("Select Stocks:"),
+        dcc.Dropdown(
+            id='stock-picker',
+            options=[
+                {'label': 'Apple (AAPL)', 'value': 'AAPL'},
+                {'label': 'Microsoft (MSFT)', 'value': 'MSFT'},
+                {'label': 'Google (GOOGL)', 'value': 'GOOGL'},
+                {'label': 'Amazon (AMZN)', 'value': 'AMZN'},
+                {'label': 'Meta (META)', 'value': 'META'},
+                {'label': 'Tesla (TSLA)', 'value': 'TSLA'},
+                {'label': 'NVIDIA (NVDA)', 'value': 'NVDA'},
+                {'label': 'Netflix (NFLX)', 'value': 'NFLX'},
+                {'label': 'Adobe (ADBE)', 'value': 'ADBE'},
+                {'label': 'Intel (INTC)', 'value': 'INTC'},
+                {'label': 'Cisco (CSCO)', 'value': 'CSCO'},
+                {'label': 'PepsiCo (PEP)', 'value': 'PEP'},
+                {'label': 'Coca-Cola (KO)', 'value': 'KO'},
+                {'label': 'Procter & Gamble (PG)', 'value': 'PG'},
+                {'label': 'Johnson & Johnson (JNJ)', 'value': 'JNJ'}
+            ],
+            value=['AAPL', 'MSFT', 'GOOGL'],  # Default selected stocks
+            multi=True
+        ),
+        html.Button("Calculate Portfolio", id='calculate-button', n_clicks=0)
+    ]),
+    dcc.Loading(
+        id="loading",
+        type="circle",  # You can use "circle", "dot", or "default"
+        children=[
+            html.Div(id='portfolio-metrics'),
+            dcc.Graph(id='efficient-frontier')
+        ]
+    )
+])
+
+# Callback to calculate portfolio metrics and efficient frontier on button click
+@app.callback(
+    [Output('portfolio-metrics', 'children'),
+     Output('efficient-frontier', 'figure')],
+    [Input('calculate-button', 'n_clicks')],
+    [State('stock-picker', 'value')]
+)
+def update_dashboard(n_clicks, selected_tickers):
+    if n_clicks == 0 or not selected_tickers:
+        return "Please select stocks and click the button to calculate.", {}
+
+    # Fetch stock data and calculate returns
+    start_date = '2020-01-01'
+    end_date = '2024-01-01'
+    risk_free_rate = 0.02
+    try:
+        stock_data = get_stock_data_cached(tuple(selected_tickers), start_date, end_date)
+    except ValueError as e:
+        return str(e), {}
+
+    returns = stock_data.pct_change().dropna()
+
+    # Optimize portfolio
+    optimal_weights = optimize_portfolio(returns, risk_free_rate)
+    portfolio_return, portfolio_volatility = calculate_portfolio_metrics(optimal_weights, returns)
+    sharpe_ratio = (portfolio_return - risk_free_rate) / portfolio_volatility
+
+    # Generate efficient frontier
+    returns_array = []
+    volatility_array = []
+    optimal_point = None  # To store the optimal portfolio point
+
+    # Calculate the efficient frontier only up to the optimal portfolio's return
+    for ret in np.linspace(0, portfolio_return, 50):  # Adjust the number of points as needed
+        constraints = (
+            {'type': 'eq', 'fun': lambda x: np.sum(x) - 1},
+            {'type': 'eq', 'fun': lambda x: calculate_portfolio_metrics(x, returns)[0] - ret}
+        )
+        bounds = tuple((0, 1) for _ in range(len(selected_tickers)))
+        result = minimize(lambda x: calculate_portfolio_metrics(x, returns)[1],
+                          [1/len(selected_tickers)] * len(selected_tickers),
+                          method='SLSQP',
+                          bounds=bounds,
+                          constraints=constraints)
+        if result.success:
+            volatility_array.append(result.fun)
+            returns_array.append(ret)
+
+            # Check if this point matches the optimal portfolio
+            if np.isclose(ret, portfolio_return, atol=1e-4):
+                optimal_point = (result.fun, ret)
+
+    # Ensure the optimal point is included
+    if optimal_point:
+        portfolio_volatility, portfolio_return = optimal_point
+
+    # Portfolio metrics
+    metrics = html.Div([
+        html.H3("Optimal Portfolio Weights:"),
+        html.Ul([html.Li(f"{ticker}: {weight:.4f}") for ticker, weight in zip(selected_tickers, optimal_weights)]),
+        html.H3("Portfolio Metrics:"),
+        html.P(f"Expected Return: {portfolio_return:.4f}"),
+        html.P(f"Volatility: {portfolio_volatility:.4f}"),
+        html.P(f"Sharpe Ratio: {sharpe_ratio:.4f}")
+    ])
+
+    # Efficient frontier figure
+    figure = {
+        'data': [
+            go.Scatter(x=volatility_array, y=returns_array, mode='lines', name='Efficient Frontier'),
+            go.Scatter(x=[portfolio_volatility], y=[portfolio_return], mode='markers', name='Optimal Portfolio', marker=dict(size=10, color='red'))
+        ],
+        'layout': go.Layout(
+            title='Efficient Frontier and Optimal Portfolio',
+            xaxis=dict(title='Volatility'),
+            yaxis=dict(title='Return'),
+            showlegend=True
+        )
+    }
+
+    return metrics, figure
+
+if __name__ == '__main__':
+    app.run(debug=False, port=8050)
