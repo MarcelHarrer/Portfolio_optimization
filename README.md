@@ -44,6 +44,12 @@ This project is a web-based dashboard for portfolio optimization using historica
 
 3. Select stocks, click "Calculate Portfolio," and explore the results.
 
+## Example
+
+Below is an example screenshot of the application:
+
+![Example Dashboard](screen.png)
+
 ## File Structure
 
 - `dashboard.py`: Main application file containing the Dash app and portfolio optimization logic.

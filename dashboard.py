@@ -56,55 +56,65 @@ def optimize_portfolio(returns, risk_free_rate):
 
 # Create Dash app
 app = Dash(__name__)
+app.title = "Portfolio Optimization Dashboard"  # Set the browser tab title
 
 # Layout with dropdown for stock selection, button, and loading spinner
 app.layout = html.Div([
-    html.H1("Interactive Portfolio Optimization Dashboard"),
     html.Div([
-        html.Label("Select Stocks:"),
-        dcc.Dropdown(
-            id='stock-picker',
-            options=[
-                {'label': 'Apple (AAPL)', 'value': 'AAPL'},
-                {'label': 'Microsoft (MSFT)', 'value': 'MSFT'},
-                {'label': 'Google (GOOGL)', 'value': 'GOOGL'},
-                {'label': 'Amazon (AMZN)', 'value': 'AMZN'},
-                {'label': 'Meta (META)', 'value': 'META'},
-                {'label': 'Tesla (TSLA)', 'value': 'TSLA'},
-                {'label': 'NVIDIA (NVDA)', 'value': 'NVDA'},
-                {'label': 'Netflix (NFLX)', 'value': 'NFLX'},
-                {'label': 'Adobe (ADBE)', 'value': 'ADBE'},
-                {'label': 'Intel (INTC)', 'value': 'INTC'},
-                {'label': 'Cisco (CSCO)', 'value': 'CSCO'},
-                {'label': 'PepsiCo (PEP)', 'value': 'PEP'},
-                {'label': 'Coca-Cola (KO)', 'value': 'KO'},
-                {'label': 'Procter & Gamble (PG)', 'value': 'PG'},
-                {'label': 'Johnson & Johnson (JNJ)', 'value': 'JNJ'}
-            ],
-            value=['AAPL', 'MSFT', 'GOOGL'],  # Default selected stocks
-            multi=True
-        ),
-        html.Label("Select Start Date:"),
-        dcc.DatePickerSingle(
-            id='start-date-picker',
-            date='2020-01-01'  # Default start date
-        ),
-        html.Label("Select End Date:"),
-        dcc.DatePickerSingle(
-            id='end-date-picker',
-            date='2024-01-01'  # Default end date
-        ),
-        html.Button("Calculate Portfolio", id='calculate-button', n_clicks=0)
-    ]),
+        html.H1("Interactive Portfolio Optimization Dashboard", style={'textAlign': 'center', 'color': '#4CAF50'}),
+        html.Div([
+            html.Label("Select Stocks:", style={'fontWeight': 'bold'}),
+            dcc.Dropdown(
+                id='stock-picker',
+                options=[
+                    {'label': 'Apple (AAPL)', 'value': 'AAPL'},
+                    {'label': 'Microsoft (MSFT)', 'value': 'MSFT'},
+                    {'label': 'Google (GOOGL)', 'value': 'GOOGL'},
+                    {'label': 'Amazon (AMZN)', 'value': 'AMZN'},
+                    {'label': 'Meta (META)', 'value': 'META'},
+                    {'label': 'Tesla (TSLA)', 'value': 'TSLA'},
+                    {'label': 'NVIDIA (NVDA)', 'value': 'NVDA'},
+                    {'label': 'Netflix (NFLX)', 'value': 'NFLX'},
+                    {'label': 'Adobe (ADBE)', 'value': 'ADBE'},
+                    {'label': 'Intel (INTC)', 'value': 'INTC'},
+                    {'label': 'Cisco (CSCO)', 'value': 'CSCO'},
+                    {'label': 'PepsiCo (PEP)', 'value': 'PEP'},
+                    {'label': 'Coca-Cola (KO)', 'value': 'KO'},
+                    {'label': 'Procter & Gamble (PG)', 'value': 'PG'},
+                    {'label': 'Johnson & Johnson (JNJ)', 'value': 'JNJ'}
+                ],
+                value=['AAPL', 'MSFT', 'GOOGL'],  # Default selected stocks
+                multi=True,
+                style={'marginBottom': '10px'}
+            ),
+            html.Label("Select Start Date:", style={'fontWeight': 'bold'}),
+            dcc.DatePickerSingle(
+                id='start-date-picker',
+                date='2020-01-01',  # Default start date
+                style={'marginBottom': '10px'}
+            ),
+            html.Label("Select End Date:", style={'fontWeight': 'bold'}),
+            dcc.DatePickerSingle(
+                id='end-date-picker',
+                date='2024-01-01',  # Default end date
+                style={'marginBottom': '10px'}
+            ),
+            html.Button("Calculate Portfolio", id='calculate-button', n_clicks=0, style={
+                'backgroundColor': '#4CAF50', 'color': 'white', 'border': 'none', 'padding': '10px 20px',
+                'textAlign': 'center', 'textDecoration': 'none', 'display': 'inline-block', 'fontSize': '16px',
+                'marginTop': '10px', 'cursor': 'pointer'
+            })
+        ], style={'width': '50%', 'margin': '0 auto', 'padding': '20px', 'border': '1px solid #ddd', 'borderRadius': '10px', 'backgroundColor': '#f9f9f9'}),
+    ], style={'padding': '20px', 'backgroundColor': '#f0f0f0'}),
     dcc.Loading(
         id="loading",
         type="circle",  # You can use "circle", "dot", or "default"
         children=[
-            html.Div(id='portfolio-metrics'),
-            dcc.Graph(id='efficient-frontier')
+            html.Div(id='portfolio-metrics', style={'marginTop': '20px', 'textAlign': 'center'}),
+            dcc.Graph(id='efficient-frontier', style={'marginTop': '20px'})
         ]
     )
-])
+], style={'fontFamily': 'Arial, sans-serif', 'lineHeight': '1.6', 'backgroundColor': '#ffffff'})
 
 # Callback to calculate portfolio metrics and efficient frontier on button click
 @app.callback(
@@ -164,7 +174,7 @@ def update_dashboard(n_clicks, selected_tickers, start_date, end_date):
     # Portfolio metrics
     metrics = html.Div([
         html.H3("Optimal Portfolio Weights:"),
-        html.Ul([html.Li(f"{ticker}: {weight:.4f}") for ticker, weight in zip(selected_tickers, optimal_weights)]),
+        html.Ul([html.Li(f"{ticker}: {weight:.4f}".strip()) for ticker, weight in zip(selected_tickers, optimal_weights)]),
         html.H3("Portfolio Metrics:"),
         html.P(f"Expected Return: {portfolio_return:.4f}"),
         html.P(f"Volatility: {portfolio_volatility:.4f}"),
